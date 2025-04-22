@@ -1,0 +1,1 @@
+This folder contains data of records that are failed to save to the hub for any reason. This fallback could be used to reupload the records to the hub.

@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=43.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cost_of_pass" 
+version = "0.0.1"
+description = "Cost-of-Pass: An Economic Framework for Evaluating Language Models"  
+authors = [
+    {name = "Mehmet Hamza Erol", email = "mhamza@stanford.edu"},
+    {name = "Batu El", email = "batuel@stanford.edu"},
+    {name = "Mirac Suzgun", email = "msuzgun@stanford.edu"},
+    {name = "Mert Yuksekgonul", email = "merty@stanford.edu"},
+    {name = "James Zou", email = "jamesz@stanford.edu"},
+]
+
+requires-python = ">=3.10"
+license = {text = "MIT license"}
+readme = "README.md"
+dependencies = [
+    "datasets",
+    "litellm",
+    "math-verify",
+    "ipykernel",
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3.10",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black",
+    "isort",
+    "flake8",
+    "pytest"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/mhamzaerol/Cost-of-Pass"
+
+# Example: If your code is in a src/ttte directory
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cost_of_pass"]
