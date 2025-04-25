@@ -3,15 +3,13 @@
 # Cost-of-Pass: An Economic Framework for Evaluating Language Models
 [![arXiv](https://img.shields.io/badge/arXiv-2504.13359-b31b1b.svg?style=flat&logo=arxiv)](https://arxiv.org/abs/2504.13359)
 [![Benchmark](https://img.shields.io/badge/Benchmark-HuggingFace-ffcc00.svg?style=flat&logo=huggingface)](https://huggingface.co/CostOfPass)
-
-🚧 **This repository is under construction. More details coming soon!** 🚧
 </div>
 
 
 ## Index
 - [Overview](#overview)
-- [Setup](#setup)
 - [Examples](#examples)
+- [Setup](#setup)
 - [Detailed Usage](#detailed-usage)
 - [Citation](#citation)
 
@@ -27,29 +25,8 @@ With our framework, we quantify the economic benefit that language models provid
 
 Our findings point to clear trends in cost-efficiency across model classes and task types, reflecting the broader dynamics of innovation in the field. These patterns, and the shifts we've observed over time, offer a window into how economic value is increasingly shaped by model-level advances rather than surface-level improvements.
 
-## Setup
-Our repository integrates [LiteLLM](https://github.com/BerriAI/litellm/tree/main) for querying language models and uses [Hugging Face](https://huggingface.co/CostOfPass) to store and share evaluation results. Follow these steps to setup the repository:
-
-1. **Clone the repository** 
-2. **Create a Python environment:** Use a tool like `Conda` or `venv`. For instance:
-```bash
-conda create -n cost_of_pass python=3.11
-conda activate cost_of_pass
-```
-3. **Install the package:** Run the following command from the repository root:
-```bash
-pip install -e .
-```
-4. **Configure API access:** To query models via LiteLLM (or your custom API) and push results to the Hugging Face Hub (of yours / ours), create a `.env` file with the necessary credentials:
-```bash
-OPENAI_API_KEY=...
-ANTHROPIC_API_KEY=...
-HF_TOKEN=...
-# Add other relevant keys as needed
-```
-
 ## Examples
-
+The following examples demonstrate how to use various components of our evaluation framework. 
 ### Creating a Client
 ```python
 from cost_of_pass import get_client, list_clients, SamplingArgs
@@ -96,6 +73,7 @@ metric = get_metric("MathExpressionMatch")
 ```
 
 ### Computing Frontier Cost-of-Pass
+Note that the passed kwargs for the hub_manager does not support pushing to the hub yet by different users. Therefore, for your own new experiments, you can create a new dataset in your organization / account, and set the `org_id` and `repo_id` accordingly (organization name / your username, and the dataset name). 
 ```python
 from cost_of_pass import ModelFamily, FrontierCostofPass
 
@@ -104,6 +82,11 @@ frontier_cop = FrontierCostofPass(
     task=task,
     baseline_cop=20.0, # Human expert cost-of-pass
     metric=metric,
+    hub_manager_kwargs = { # details for the record management
+        'org_id': 'CostOfPass', # The organization ID to use for the hub
+        'repo_id': 'benchmark', # The repo ID to use for the hub
+        'token': '...', # HF token (in case you want to use a different token than the one in the .env file)
+    }
 )
 
 # Create a model family
@@ -123,9 +106,36 @@ print(
     )
 )
 ```
+
+## Setup
+Our repository integrates [LiteLLM](https://github.com/BerriAI/litellm/tree/main) for querying language models and uses [Hugging Face](https://huggingface.co/CostOfPass) to store and share evaluation results. Follow these steps to setup the repository:
+
+1. **Clone the repository** 
+2. **Create a Python environment:** Use a tool like `Conda` or `venv`. For instance:
+```bash
+conda create -n cost_of_pass python=3.11
+conda activate cost_of_pass
+```
+3. **Install the package:** Run the following command from the repository root:
+```bash
+pip install -e .
+```
+4. **Configure API access:** To query models via LiteLLM (or your custom API) and push results to the Hugging Face Hub (of yours / ours), create a `.env` file with the necessary credentials:
+```bash
+OPENAI_API_KEY=...
+ANTHROPIC_API_KEY=...
+HF_TOKEN=...
+# Add other relevant keys as needed
+```
+
 ## Detailed Usage
+### Analysis
+Please check the `analysis/analysis.ipynb` file for the notebook on reproducing the analyses in the paper. 
 ### Passing Custom Args
 You can pass custom arguments to tasks, inference time methods, and evaluations. 
+<details>
+<summary>Show example code</summary>
+
 ```python
 # Modifying task name and number of samples to work with
 task = get_task("GPQA_Diamond", task_name="My_GPQA_Diamond_Task", n_samples=128)
@@ -167,21 +177,63 @@ frontier_cop.estimate_task(
     update_hub=True, # Update the hub with the newly generated evaluation records
     append=True, # Should append or overwrite the existing records in the hub (if updating)
     workers=64, # Number of workers to use for parallel API calls
-    hub_manager_kwargs = { # details for the record management
-        'org_id': 'CostOfPass', # The organization ID to use for the hub
-        'repo_id': 'benchmark', # The repo ID to use for the hub
-        'token': '...', # HF token (in case you want to use a different token than the one in the .env file)
-    }
 )
 ```
 
-### Analysis
-Please check the `analysis` folder for the notebook on reproducing the analyses in the paper.
+</details>
 
 ### Custom Benchmark
 If you would like to create a custom benchmark, using different models, tasks, metrics, inference time methods, or different cost / performance estimations, please check these information and follow the instructions:
-**TODO: Coming Soon!**
+#### Implementing a Custom Task
+Each custom task should inherit from the `Task` class implemented in `tasks/base.py`, and should support the implementation for the `load_data` and `comparator` methods. The former is responsible for loading the data into a common format (a dictionary with keys `input`, `target` and optionally `metadata`), the latter provides a comparator function to be used in an inference-time method requiring such comparison (e.g. `MajorityVotingMethod`). Moreover, the custom task's `__init__` method can take alternative arguments that could affect the behavior in these methods (e.g. a specific subset type of the dataset could be passed as an argument). When such a custom task is imported inside the `tasks/__init__.py` file, it will be automatically registered and available for use with the `get_task` function.
+#### Implementing a Custom Model
+Even though many models are already available through `LiteLLM` (implemented in `clients/litellm.py`), you can still implement custom model API call interfaces by inheriting from `base.py/Client` class. Any custom model should implement the following methods:
+- `generate_one`: Given a prompt, sampling arguments, and other parameters, this should support the generation of a single response from the model, and return a generation log containing the prompt, response, and token counts.
+- `count_tokens`: Given a text, this should return how many tokens the model would use to represent the text.
+- `cost_per_prompt_token`: This should return the cost per prompt token for the model.
+- `cost_per_completion_token`: This should return the cost per completion token for the model.
+Importing the custom model inside the `models/__init__.py` file will automatically register it and make it available for use with the `get_client` function.
+#### Implementing a Custom Inference Time Method
+Currently, we have implemented basic inference time methods such as `VanillaPromptMethod`, `SelfRefinementMethod` and `MajorityVotingMethod`. You can implement alternative methods by inheriting from the `base.py/TestTimeMethod` class. Any such custom method should implement the `run_for_one` method, which takes an input query, a client query function (that is monitored (for token consumption) whenever the method makes a call) and a comparator function that can compare two of the generated outputs (if needed). The output of this method should be a string, indicating the final output of the method. Similarly, importing the custom method inside the `testtime/__init__.py` file will automatically register it and make it available for use with the `get_test_time_method` function.
+#### Implementing a Custom Metric
+Any new custom metric should inherit from the `base.py/EvaluationMetric` class, and implement the `compare` static method. This method takes an output string and a query object, and scores the output (right now binary) based on its satisfactoriness. Importing the custom metric inside the `metrics/__init__.py` file will automatically register it and make it available for use with the `get_metric` function.
+#### Evaluation
+In case you may want to generate records of running a model / inference-time method on a task before evaluating with a metric or using in a cost-of-pass based analysis, you can use the `Evaluator` class under the `evaluation/evaluate.py` file:
+```python
+from cost_of_pass import Evaluator
 
+evaluator = Evaluator(
+    model=..., 
+    task=..., 
+    tt_method=...,
+    hub_manager_kwargs = {
+        'org_id': ...,
+        'repo_id': ...,
+    }
+)
+```
+This class takes a model, task and an inference-time method, and supports running for queries with multiple arguments (check the `run` method). This class supports saving or loading the generated records to/from a Hugging Face Hub (e.g. check our benchmark repo [here](https://huggingface.co/CostOfPass/benchmark)), by specifying arguments in the `__init__` method inside the `hub_manager_kwargs` which are passed to the `HubManager` class (important ones: `org_id`, `repo_id` and `token` (if not provided through `.env` file)). Evaluator's `run` method supports loading / saving records from / to hub (`use_hub_cache`, `update_hub`) and requests the user on how many times a model should be run per query (`n_runs`): 
+```python
+full_records, has_bad = evaluator.run(
+    n_runs=8, # Number of runs per query
+    use_hub_cache=True, # Use the cached records from the hub (if available)
+    update_hub=True, # Update the hub with the newly generated records
+    workers=64, # Number of workers to use for parallel API calls
+)
+```
+These records are by default saved / loaded to / from the hub, as `FullRecord` object defined under the `recording.py` file (determined by the `use_hub_cache` and `update_hub` arguments). In case a user wants to evaluate the generated records (taken from hub or generated on-the-fly), the `evaluate` method of the `Evaluator` class can be used: 
+```python
+metric_records = evaluator.evaluate(
+    metric=..., # The metric to use for evaluation
+    use_hub_cache=True, # Use the cached records from the hub (if available)
+    update_hub=True, # Update the hub with the newly generated records
+    workers=64, # Number of workers to use for parallel API calls
+)
+```
+This method takes a metric and similar arguments as the `run` method, and generates / loads records (according to the availability / arguments passed), evaluates them, and by default saves them to the hub as a `MetricRecord` object. It returns a list of `MetricRecord` objects. Note that we currently do not support passing custom full_records into the `evaluate` method, instead this method either loads saved records from the hub or generates new ones. 
+Given these, a user may firstly generate `FullRecord` objects, store them in the hub, then evaluate them with a metric and store the `MetricRecord` objects in the hub. Finally, use them to estimate the frontier cost-of-pass in their analyses, in such separable steps (automatically supported by our codebase). Notably, this (using hub as a cache) saves API calls / model generations, and allows for reproducible results.
+#### Extension Directions
+One might want to improve the `HubManager` implementation to make more abstract for supporting various record storage systems (e.g. local storage, different cloud storage systems etc.) for custom purposes. 
 ## Citation
 If you find our work useful, please consider citing:
 ```bibtex
